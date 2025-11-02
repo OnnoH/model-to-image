@@ -1,0 +1,27 @@
+{
+  "name": "model-to-image",
+  "description": "Convert BPMN 2.0 or DMN 1.3 diagrams to PDF, SVG or PNG images",
+  "version": "0.0.1",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "model-to-image": "./src/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Onno Huijgen <ohuijgen@gmail.com> (https://onnoh.nl/)",
+  "license": "MIT",
+  "dependencies": {
+    "bpmn-js": "^18.8.0",
+    "dmn-js": "^17.4.0",
+    "meow": "^14.0.0",
+    "puppeteer": "^24.26.1"
+  },
+  "files": [
+    "cli.js",
+    "index.js",
+    "skeleton-bpmn.html"
+  ]
+}

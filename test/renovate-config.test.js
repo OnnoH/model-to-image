@@ -86,8 +86,13 @@ function changedPaths() {
   });
 }
 
-test('ONN-26 @AC-4: the branch changes no file under .github/ against its base', function() {
-  const underGithub = changedPaths().filter(function(path) {
+test('ONN-26 @AC-4: the branch changes no file under .github/ against its base', function(t) {
+  const changed = changedPaths();
+
+  // in the log, so a reviewer sees which paths the check looked at
+  t.diagnostic(`changed against ${process.env.GITHUB_BASE_REF || 'main'}: ${changed.join(', ') || '(nothing)'}`);
+
+  const underGithub = changed.filter(function(path) {
     return path === '.github' || path.startsWith('.github/');
   });
 

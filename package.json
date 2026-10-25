@@ -13,7 +13,7 @@
   "scripts": {
     "lint": "eslint src test scripts eslint.config.js",
     "test": "node --test \"test/**/*.test.js\"",
-    "verify:pr-checks": "node scripts/verify-pr-checks.js"
+    "verify:handoff": "node scripts/verify-handoff.js"
   },
   "keywords": [],
   "author": "Onno Huijgen <ohuijgen@gmail.com> (https://onnoh.nl/)",

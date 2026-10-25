@@ -46,59 +46,7 @@ test('ONN-26 @AC-2: renovate-config-validator accepts renovate.json', { timeout:
   );
 });
 
-// AC-3 is about the state of the checks on the pull request head at handoff
-// time, which no job inside the same run can observe; it is the handoff gate,
-// scripts/verify-pr-checks.js.
-
-function git(args) {
-  return spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-}
-
-// the base of the branch under test: the pull request base on CI, main locally
-function baseCommit() {
-  const base = process.env.GITHUB_BASE_REF || 'main';
-
-  // the CI checkout is shallow and has no ref for the base branch, so fetch it
-  const fetch = git([ 'fetch', '--no-tags', 'origin', `+refs/heads/${base}:refs/onn-26/base` ]);
-
-  if (fetch.status === 0) {
-    return 'refs/onn-26/base';
-  }
-
-  for (const candidate of [ `refs/remotes/origin/${base}`, `refs/heads/${base}` ]) {
-    if (git([ 'rev-parse', '--verify', '--quiet', candidate ]).status === 0) {
-      return candidate;
-    }
-  }
-
-  throw new Error(`cannot resolve base branch ${base}: ${fetch.stderr}`);
-}
-
-// the paths this branch changes against its base; on a pull_request checkout
-// HEAD is the merge commit, so this is exactly the pull request's diff
-function changedPaths() {
-  const diff = git([ 'diff', '--name-only', baseCommit(), 'HEAD' ]);
-
-  assert.equal(diff.status, 0, `git diff failed: ${diff.stderr}`);
-
-  return diff.stdout.split('\n').filter(function(line) {
-    return line !== '';
-  });
-}
-
-test('ONN-26 @AC-4: the branch changes no file under .github/ against its base', function(t) {
-  const changed = changedPaths();
-
-  // in the log, so a reviewer sees which paths the check looked at
-  t.diagnostic(`changed against ${process.env.GITHUB_BASE_REF || 'main'}: ${changed.join(', ') || '(nothing)'}`);
-
-  const underGithub = changed.filter(function(path) {
-    return path === '.github' || path.startsWith('.github/');
-  });
-
-  assert.deepEqual(
-    underGithub,
-    [],
-    `.github/ is the board's as code owner; this branch changes:\n${underGithub.join('\n')}`
-  );
-});
+// AC-3 and AC-4 are about the pull request itself -- the state of the checks on
+// its head commit, and the paths it changes against its base -- which no job
+// inside the same run can observe. They are the handoff gate,
+// scripts/verify-handoff.js, run against the pull request before QA.

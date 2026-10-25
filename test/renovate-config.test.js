@@ -46,25 +46,54 @@ test('ONN-26 @AC-2: renovate-config-validator accepts renovate.json', { timeout:
   );
 });
 
-test('ONN-26 @AC-3: the ci workflow runs on every pull request, so a change to the config is always checked', function() {
-  const workflow = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+// AC-3 is about the state of the checks on the pull request head at handoff
+// time, which no job inside the same run can observe; it is the handoff gate,
+// scripts/verify-pr-checks.js.
 
-  // a cheap structural check; the repo has no YAML parser among its dependencies
-  assert.match(workflow, /^on:$/m, 'ci.yml has no trigger block');
-  assert.match(workflow, /^ {2}pull_request:$/m, 'ci.yml does not run on pull_request');
-});
+function git(args) {
+  return spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+}
 
-test('ONN-26 @AC-4: the Renovate configuration lives at the repo root, not under .github/', function() {
-  const result = spawnSync(
-    'git',
-    [ 'ls-files', '--', '.github/renovate.json', '.github/renovate.json5', '.github/dependabot.yml', '.github/dependabot.yaml' ],
-    { cwd: ROOT, encoding: 'utf8' }
-  );
+// the base of the branch under test: the pull request base on CI, main locally
+function baseCommit() {
+  const base = process.env.GITHUB_BASE_REF || 'main';
 
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(
-    result.stdout.trim(),
-    '',
-    `dependency configuration under .github/ would need the board as code owner:\n${result.stdout}`
+  // the CI checkout is shallow and has no ref for the base branch, so fetch it
+  const fetch = git([ 'fetch', '--no-tags', 'origin', `+refs/heads/${base}:refs/onn-26/base` ]);
+
+  if (fetch.status === 0) {
+    return 'refs/onn-26/base';
+  }
+
+  for (const candidate of [ `refs/remotes/origin/${base}`, `refs/heads/${base}` ]) {
+    if (git([ 'rev-parse', '--verify', '--quiet', candidate ]).status === 0) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`cannot resolve base branch ${base}: ${fetch.stderr}`);
+}
+
+// the paths this branch changes against its base; on a pull_request checkout
+// HEAD is the merge commit, so this is exactly the pull request's diff
+function changedPaths() {
+  const diff = git([ 'diff', '--name-only', baseCommit(), 'HEAD' ]);
+
+  assert.equal(diff.status, 0, `git diff failed: ${diff.stderr}`);
+
+  return diff.stdout.split('\n').filter(function(line) {
+    return line !== '';
+  });
+}
+
+test('ONN-26 @AC-4: the branch changes no file under .github/ against its base', function() {
+  const underGithub = changedPaths().filter(function(path) {
+    return path === '.github' || path.startsWith('.github/');
+  });
+
+  assert.deepEqual(
+    underGithub,
+    [],
+    `.github/ is the board's as code owner; this branch changes:\n${underGithub.join('\n')}`
   );
 });

@@ -1,0 +1,84 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+
+  # AC-1: convert the BPMN and DMN fixtures and assert the output is there
+  test:
+    name: test (AC-1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      # npm may defer dependency install scripts, so fetch the browser
+      # puppeteer needs explicitly
+      - name: Cache puppeteer browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Chrome for puppeteer
+        run: npx puppeteer browsers install chrome
+
+      - run: npm test
+
+  # AC-2: ESLint over src/
+  lint:
+    name: lint (AC-2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - run: npm run lint
+
+  # AC-3: secret scan on every push and pull request
+  secret-scan:
+    name: secret-scan (AC-3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            zricethezav/gitleaks:v8.21.2 \
+            detect --source=/repo --redact --verbose --no-banner
+
+  # AC-4: fail on a high or critical advisory in the dependencies
+  dependency-audit:
+    name: dependency-audit (AC-4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm audit --audit-level=high

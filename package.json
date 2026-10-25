@@ -2,13 +2,17 @@
   "name": "model-to-image",
   "description": "Convert BPMN 2.0 or DMN 1.3 diagrams to PDF, SVG or PNG images",
   "version": "0.0.1",
-  "main": "index.js",
+  "main": "src/index.js",
   "type": "module",
   "bin": {
     "model-to-image": "./src/cli.js"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "eslint src test eslint.config.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "keywords": [],
   "author": "Onno Huijgen <ohuijgen@gmail.com> (https://onnoh.nl/)",
@@ -17,11 +21,13 @@
     "bpmn-js": "^18.8.0",
     "dmn-js": "^17.4.0",
     "meow": "^14.0.0",
-    "puppeteer": "^24.26.1"
+    "puppeteer": "^25.16.0"
   },
   "files": [
-    "cli.js",
-    "index.js",
-    "skeleton-bpmn.html"
-  ]
+    "src"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0"
+  }
 }

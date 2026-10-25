@@ -2,10 +2,7 @@
 
 import meow from 'meow';
 import path from 'path';
-import fs from 'fs';
-import { Console } from 'node:console';
 const {
-  join: joinPath,
   delimiter: pathDelimiter
 } = path;
 import { convertAll } from './index.js';
@@ -91,7 +88,7 @@ const conversions = cli.input.map(function (conversion) {
 
   const hasDelimiter = conversion.includes(pathDelimiter);
   if (!hasDelimiter) {
-    console.error(error(`  Error: no <diagramFile>${pathDelimiter}<outputConfig> param provided`));
+    console.error(`  Error: no <diagramFile>${pathDelimiter}<outputConfig> param provided`);
     cli.showHelp(1);
   }
 
@@ -117,13 +114,10 @@ const conversions = cli.input.map(function (conversion) {
   return {
     input,
     outputs
-  }
+  };
 });
 
-const output = fs.createWriteStream('./stdout.log');
-const errorOutput = fs.createWriteStream('./stderr.log');
-// Custom simple logger
-const logger = new Console({ stdout: output, stderr: errorOutput });
+const logger = console;
 
 const footer = cli.flags.footer;
 const title = cli.flags.title === false ? false : cli.flags.title;
@@ -133,45 +127,23 @@ const [width, height] = cli.flags.minDimensions.split('x').map(function (d) {
 });
 const dmnView = cli.flags.dmnView;
 
-function isDMN(file) {
-  return path.extname(file).toLowerCase() === '.dmn';
-}
-
-function isBPMN(file) {
-  return path.extname(file).toLowerCase() === '.bpmn';
-}
-
 (async () => {
-  logger.log(info('Starting conversions...'));
-  logger.log("Footer:", footer);
-  logger.log("Title:", title);
-  logger.log("Scale:", scale);
-  logger.log("Min Dimensions:", width + "x" + height);
-  logger.log("DMN View:", dmnView);
-  // Process in the order provided, mixing BPMN and DMN if needed
-  const bpmnQueue = [];
-  for (const conversion of conversions) {
-    const { input, outputs } = conversion;
-    if (isDMN(input)) {
-      // Directly render DMN
-      await renderDMN(input, outputs, {
-        title,
-        minDimensions: { width, height },
-        view: cli.flags.dmnView
-      });
-    } else {
-      // Defer BPMN to batch-render via convertAll (as before)
-      bpmnQueue.push(conversion);
-    }
-  }
-  if (bpmnQueue.length) {
-    await convertAll(bpmnQueue, {
-      minDimensions: { width, height },
-      title,
-      footer,
-      deviceScaleFactor: scale
-    });
-  }
+  logger.log('Starting conversions...');
+  logger.log('Footer:', footer);
+  logger.log('Title:', title);
+  logger.log('Scale:', scale);
+  logger.log('Min Dimensions:', `${width}x${height}`);
+  logger.log('DMN View:', dmnView);
+
+  // BPMN and DMN are rendered in the order provided, sharing one browser;
+  // the viewer is picked per diagram from its file extension
+  await convertAll(conversions, {
+    minDimensions: { width, height },
+    title,
+    footer,
+    deviceScaleFactor: scale,
+    dmnView
+  });
 })().catch((e) => {
   logger.error('failed to export diagram(s)');
   logger.error(e);

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>model-to-image</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    #title {
+      flex: 0 0 auto;
+      padding: 10px 15px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #404040;
+      box-sizing: border-box;
+    }
+
+    #title:empty {
+      display: none;
+    }
+
+    #canvas {
+      flex: 1 1 auto;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .dmn-content {
+      padding: 10px 15px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div id="title"></div>
+  <div id="canvas"></div>
+
+  <script>
+    /* global BpmnJS, DmnJS */
+
+    // padding around the diagram contents, in pixels
+    var PADDING = 5;
+
+    var viewer;
+    var activeMode;
+
+    /**
+     * Load a script (by url, relative to this document) and resolve
+     * once it is evaluated.
+     */
+    function loadScript(src) {
+      return new Promise(function(resolve, reject) {
+        var script = document.createElement('script');
+
+        script.src = src;
+        script.onload = function() {
+          resolve();
+        };
+        script.onerror = function() {
+          reject(new Error('failed to load script ' + src));
+        };
+
+        document.head.appendChild(script);
+      });
+    }
+
+    /**
+     * Load a stylesheet (by url, relative to this document) and resolve
+     * once it is applied.
+     */
+    function loadStyle(src) {
+      return new Promise(function(resolve, reject) {
+        var link = document.createElement('link');
+
+        link.rel = 'stylesheet';
+        link.href = src;
+        link.onload = function() {
+          resolve();
+        };
+        link.onerror = function() {
+          reject(new Error('failed to load stylesheet ' + src));
+        };
+
+        document.head.appendChild(link);
+      });
+    }
+
+    function loadStyles(styles) {
+      return Promise.all((styles || []).map(loadStyle));
+    }
+
+    /**
+     * The diagram-js instance that owns the canvas, or null if the
+     * active view is not diagram based (DMN tables and expressions).
+     */
+    function getDiagramViewer() {
+      if (activeMode === 'bpmn') {
+        return viewer;
+      }
+
+      var active = viewer.getActiveViewer();
+
+      return active && active.get('canvas', false) ? active : null;
+    }
+
+    /**
+     * Import the diagram, fit it into view and report the viewport the
+     * host should use to capture it.
+     *
+     * @return {Promise<{ width: number, height: number, diagramHeight: number }>}
+     */
+    async function openDiagram(diagramXML, options) {
+      var mode = options.mode;
+      var minDimensions = options.minDimensions || { width: 0, height: 0 };
+      var title = options.title;
+      var footer = options.footer;
+      var view = options.view || 'drd';
+
+      activeMode = mode;
+
+      var titleElement = document.querySelector('#title');
+
+      // --no-footer strips the title, too
+      if (footer !== false && title) {
+        titleElement.textContent = title;
+      } else {
+        titleElement.textContent = '';
+      }
+
+      viewer = mode === 'bpmn'
+        ? new BpmnJS({ container: '#canvas' })
+        : new DmnJS({ container: '#canvas' });
+
+      await viewer.importXML(diagramXML);
+
+      if (mode === 'dmn') {
+        await openView(view);
+      }
+
+      return fitViewport(minDimensions);
+    }
+
+    /**
+     * Open the requested DMN view.
+     */
+    async function openView(view) {
+      var views = viewer.getViews();
+
+      var match = views.filter(function(v) {
+        return v.type === view;
+      })[0];
+
+      if (!match) {
+        throw new Error(
+          'no DMN view <' + view + '> in diagram; available: ' +
+          views.map(function(v) {
+            return v.type;
+          }).join(', ')
+        );
+      }
+
+      await viewer.open(match);
+    }
+
+    /**
+     * Compute the viewport that shows the whole diagram, honouring the
+     * configured minimum dimensions.
+     */
+    function fitViewport(minDimensions) {
+      var titleHeight = document.querySelector('#title').offsetHeight;
+
+      var diagramViewer = getDiagramViewer();
+
+      var contentWidth;
+      var contentHeight;
+
+      if (diagramViewer) {
+        var canvas = diagramViewer.get('canvas');
+
+        canvas.zoom('fit-viewport', 'auto');
+
+        var inner = canvas.viewbox().inner;
+
+        contentWidth = inner.width + PADDING * 2;
+        contentHeight = inner.height + PADDING * 2;
+      } else {
+        // DMN decision table / literal expression: measure the DOM
+        var content = document.querySelector('#canvas');
+
+        content.classList.add('dmn-content');
+
+        contentWidth = content.scrollWidth;
+        contentHeight = content.scrollHeight;
+      }
+
+      var width = Math.max(minDimensions.width || 0, Math.ceil(contentWidth));
+      var diagramHeight = Math.max(
+        minDimensions.height || 0,
+        Math.ceil(contentHeight) + titleHeight
+      );
+
+      return {
+        width: width,
+        height: diagramHeight,
+        diagramHeight: diagramHeight
+      };
+    }
+
+    /**
+     * Re-fit the diagram after the host applied the viewport.
+     */
+    function resize() {
+      var diagramViewer = getDiagramViewer();
+
+      if (diagramViewer) {
+        diagramViewer.get('canvas').zoom('fit-viewport', 'auto');
+      }
+    }
+
+    /**
+     * @return {Promise<string>} the diagram as an SVG document
+     */
+    async function toSVG() {
+      var diagramViewer = getDiagramViewer();
+
+      if (!diagramViewer) {
+        throw new Error('the active view cannot be exported as SVG');
+      }
+
+      var result = await diagramViewer.saveSVG();
+
+      return result.svg;
+    }
+  </script>
+</body>
+</html>
